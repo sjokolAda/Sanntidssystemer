@@ -1,0 +1,74 @@
+#include "io.h"
+#include <unistd.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <sched.h>
+#include <sys/mman.h>
+#include <native/task.h>
+
+
+#define CHANNEL_A 1
+#define CHANNEL_B 2
+#define CHANNEL_C 3
+
+#define TASK_PRIO 99 /* Highest RT priority */
+#define TASK_MODE 0 /* No flags */
+#define TASK_STKSZ 0 /* Stack size (use default one) */
+
+
+RT_TASK TestA;
+
+
+
+
+int set_cpu(int cpu_number) 
+{ 
+// setting cpu set to the selected cpu
+	cpu_set_t cpu;
+	CPU_ZERO(&cpu); 
+	CPU_SET(cpu_number, &cpu); 
+// set cpu set to current thread and return
+	return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpu); 
+} 
+
+void testA (void *cookie)
+{
+	rt_task_set_periodic(NULL, TM_NOW, 1000); // 1000000000 = 1s
+	
+	while(1) {
+		/* ... "cookie" should be NULL ... */
+		rt_task_wait_period(NULL);
+
+		printf("hola\n");
+		}
+}
+
+	
+
+
+
+int main(){
+	int res = io_init();
+	if (res !=1){
+		printf("IO init failed\n");
+		return -1;
+	}
+
+	int err;
+	mlockall(MCL_CURRENT|MCL_FUTURE);
+
+	printf("Hello from main! Threads are done\n");
+	
+	err = rt_task_create(&TestA,"TestA",TASK_STKSZ,TASK_PRIO,TASK_MODE);
+	if (!err){
+
+		rt_task_start(&TestA,&testA,NULL);
+	}
+
+	pause();
+	rt_task_delete(&TestA);
+
+
+	return 0;
+
+}

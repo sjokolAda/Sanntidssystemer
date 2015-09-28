@@ -1,0 +1,164 @@
+#include "io.h"
+#include <unistd.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <sched.h>
+#include <sys/mman.h>
+#include <native/task.h>
+
+
+#define CHANNEL_A 1
+#define CHANNEL_B 2
+#define CHANNEL_C 3
+
+#define TASK_PRIO 99 /* Highest RT priority */
+#define TASK_MODE T_JOINABLE /* Allow threads to join */
+#define TASK_STKSZ 0 /* Stack size (use default one) */
+#define cpuid 1 /*cpu number*/
+
+
+//task definition
+RT_TASK TestA;
+RT_TASK TestB;
+RT_TASK TestC;
+
+int set_cpu(int cpu_number) 
+{ 
+// setting cpu set to the selected cpu
+	cpu_set_t cpu;
+	CPU_ZERO(&cpu); 
+	CPU_SET(cpu_number, &cpu); 
+// set cpu set to current thread and return
+	return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpu); 
+} 
+
+//Task_body
+void testA (void *cookie)
+{
+	rt_task_set_periodic(NULL, TM_NOW, 100000); 
+	
+	while(1) {
+		/* ... "cookie" should be NULL ... */
+		rt_task_wait_period(NULL);
+		
+		io_write(CHANNEL_A, io_read(CHANNEL_A));
+		}
+}
+
+void testB (void *cookie)
+
+{
+	rt_task_set_periodic(NULL, TM_NOW, 100000); // 
+	
+	while(1) {
+		/* ... "cookie" should be NULL ... */
+		rt_task_wait_period(NULL);
+
+		io_write(CHANNEL_B, io_read(CHANNEL_B));
+		}
+}
+
+void testC (void *cookie)
+{
+	rt_task_set_periodic(NULL, TM_NOW, 100000); // 1000000000 = 1s
+	
+	while(1) {
+		/* ... "cookie" should be NULL ... */
+		rt_task_wait_period(NULL);
+
+		io_write(CHANNEL_C, io_read(CHANNEL_C));
+		}
+}
+
+
+//Disturbance:
+void* tarderthread(){
+	set_cpu(1);
+	int i = 1;
+	while(1){
+		i++;
+		i--;
+	}
+}
+
+
+int main(){
+	int res = io_init();
+	if (res !=1){
+		printf("IO init failed\n");
+		return -1;
+	}
+	
+	int err;
+	mlockall(MCL_CURRENT|MCL_FUTURE); //lock the current and future memory allocations to the main memory
+
+
+	//Create tasks
+	err = rt_task_create(&TestA,"TestA",TASK_STKSZ,TASK_PRIO,TASK_MODE|T_CPU(cpuid));
+	if (!err){
+
+		rt_task_start(&TestA,&testA,NULL);
+	}
+	err = rt_task_create(&TestB,"TestB",TASK_STKSZ,TASK_PRIO,TASK_MODE|T_CPU(cpuid));
+	if (!err){
+		rt_task_start(&TestB,&testB,NULL);
+	}
+	
+	err = rt_task_create(&TestC,"TestC",TASK_STKSZ,TASK_PRIO,TASK_MODE|T_CPU(cpuid));
+	if (!err){
+		rt_task_start(&TestC,&testC,NULL); 
+	}
+
+	//join rt_threads	
+	rt_task_join(&TestA);
+	rt_task_join(&TestB);
+	rt_task_join(&TestC);
+
+
+	//disturbance threads
+	pthread_t dthread1;
+	pthread_t dthread2;
+	pthread_t dthread3;
+	pthread_t dthread4;
+	pthread_t dthread5;
+	pthread_t dthread6;
+	pthread_t dthread7;
+	pthread_t dthread8;
+	pthread_t dthread9;
+	pthread_t dthread10;	
+
+
+	pthread_create(&dthread1, NULL, tarderthread, NULL);
+	pthread_create(&dthread2, NULL, tarderthread, NULL);
+	pthread_create(&dthread3, NULL, tarderthread, NULL);
+	pthread_create(&dthread4, NULL, tarderthread, NULL);
+	pthread_create(&dthread5, NULL, tarderthread, NULL);
+	pthread_create(&dthread6, NULL, tarderthread, NULL);
+	pthread_create(&dthread7, NULL, tarderthread, NULL);
+	pthread_create(&dthread8, NULL, tarderthread, NULL);
+	pthread_create(&dthread9, NULL, tarderthread, NULL);
+	pthread_create(&dthread10,NULL, tarderthread, NULL);
+	
+
+	pthread_join(dthread1, NULL);
+	pthread_join(dthread2, NULL);
+	pthread_join(dthread3, NULL);
+	pthread_join(dthread4, NULL);
+	pthread_join(dthread5, NULL);
+	pthread_join(dthread6, NULL);
+	pthread_join(dthread7, NULL);
+	pthread_join(dthread8, NULL);
+	pthread_join(dthread9, NULL);
+	pthread_join(dthread10, NULL);
+	
+	
+	pause();
+
+	rt_task_delete(&TestA);
+	rt_task_delete(&TestB);
+	rt_task_delete(&TestC);
+
+	printf("Hello from main! Threads are done\n");
+	return 0;
+
+}
