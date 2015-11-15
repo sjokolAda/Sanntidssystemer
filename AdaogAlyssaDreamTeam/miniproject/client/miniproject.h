@@ -28,7 +28,7 @@ void udp_close(struct udp_conn *udp);
 
 // function replacing clock_nanosleep
 // DO NOT use for periods over 500 ms
-int clock_nanosleep(struct timespec *next);
+int clock_nanosleep1(struct timespec *next);
 
 void timespec_add_us(struct timespec *t, long us);
 

@@ -1,151 +1,120 @@
 #include <arpa/inet.h>
-#include <pthread.h>
-#include "miniproject.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include "semaphore.h"
-
-
-
-#define UDP_PORT = 9999;
-#define SERVER_IP = 129.241.187.146;
-#define MSG_LENGTH = 255;
-
-
-
-//Mutexes and semaphores
-pthread_mutex_t TINFOlock;
-pthread_mutex_t singlesend;
-sem_t u_updt;
-sem_t y_updt;
-
-struct udp_conn client;
-struct TINFO
-{
-	double y;
-	double u;
-	struct udp_conn conn;
-};
-
-
-//functions
-void UDP_listener(*t_info);
-void UDP_sender(*t_info);
-void PIctrl(*t_info);
+#include "shared.h"
+#include "network.h"
+#include "PIDctrl.h"
+#include "signalHandler.h"
 
 
 int main()
 {
-	// init UDP connection struct
-	struct TINFO *t_info = malloc(sizeof(*t_info));
+	int err=0;
+	// Init UDP connection struct
 
-	t_info->y = 0;
-	t_info->u = 0;
-	t_info->conn=client;
+	err = udp_init_client(&tinfo_connection.conn, UDP_PORT, SERVER_IP);
+	if (err!=0)
+	{
+		printf("error connecting to server");
+	}
+
+	/*
+	//init shared output struct
+	tinfo_output_t y;
+	y.y_val = 0;
+	*/
+	err = pthread_mutex_init(&tinfo_output.lock, NULL);
+	if (err !=0)
+	{
+		printf("error initializing mutex");
+	}
+
+		
 
 
-	udp_init_client(&client, UDP_PORT, SERVER_IP); //or own ip?
+
+    	//Start threads
 	
-	//init variables/semaforer/mutexer
-	int erru = sem_init(&u_updt,0,0);
-	int erry = sem_init(&y_udp,0,0);
-	if ((erry != 0)||(erry!=0))
+	pthread_t udprecv, pidctrl, sighandl;
+
+	err = pthread_create(&udprecv, NULL, UDP_listener, NULL);
+	if (err!=0)
 	{
-		perror("Sem init failed");
-	}
-	int errv= pthread_mutex_init(&TINFOlock,NULL);
-	int errs = pthread_mutex_init(&singlesend, NULL);	
-	if ((errv!=0)||(errs!=0)
-	{
-		perror("Mutex init failed");
+		printf("Thread Creation failed");
 	}
 
-
-    //start threads
-	pthread_t udprecv, udpsend, pictrl;
-	int res = pthread_create_(&udprecv, NULL, UDP_listener);
-	if (res!=0)
+	err = pthread_create(&pidctrl, NULL, PIDctrl, NULL);
+	if (err!=0)
 	{
 		perror("Thread Creation failed");
 	}
-
-	res = pthread_create_(&udpsend, NULL, UDP_sender);
-	if (res!=0)
-	{
-		perror("Thread Creation failed");
-	}
-
-	res = pthread_create_(&pictrl, NULL, PI_controller);
-	if (res!=0)
+	
+	err = pthread_create(&sighandl, NULL,signalHandler,NULL );
+	if (err!=0)
 	{
 		perror("Thread Creation failed");
 	}	
 	
 	
+
+	// start simulation
+
+	pthread_mutex_lock(&tinfo_connection.sendlock);
+	err = udp_send(&tinfo_connection.conn, "START", sizeof("START"));
+	if (err!=0){
+		printf("Failed to start simulation");	
+	}
+	pthread_mutex_unlock(&tinfo_connection.sendlock);
+
+
 	//join thread
-	res = pthread_join(udprecv, NULL);  
-    if (res != 0) {  
-        perror("Joining of thread failed stooped");  
-        exit(EXIT_FAILURE);  
-    } 
-
-	res = pthread_join(udpsend, NULL);  
-    if (res != 0) {  
-        perror("Joining of thread failed stooped");  
-        exit(EXIT_FAILURE);  
-    }
-
-	res = pthread_join(pictrl, NULL);  
-    if (res != 0) {  
-        perror("Joining of thread failed stooped");  
-        exit(EXIT_FAILURE);  
-    }
 	
-	//free allocate mem
-	free(t_info); 
 
-	// close connection
-	udp_close(t_info->con);	
+	err = pthread_join(pidctrl, NULL);  
+    	if (err != 0) {  
+        	printf("Joining of thread failed stooped");    
+    	}
 	
-    
-	//Destroy all semaphores and mutexes
-	
-	sem_destroy(&u_udpt);
-	sem_destroy(&y_udpt);
-	ptread_mutex_destroy(&varlock);
-
+	// stop simulation
+	pthread_mutex_lock(&tinfo_connection.sendlock);
+	err = udp_send(&tinfo_connection.conn, "STOP", sizeof("STOP"));
+	if (err!=0){
+		printf("Failed to stop simulation");	
+	}
+	pthread_mutex_unlock(&tinfo_connection.sendlock);
 	
 	
 	return 0;      
 }
 
+/*
+void init_sem_&_mutexes(){
+	//Init semaphores/mutexes
+	int err1 = sem_init(&new_sig,0,0);
+	int err2 = sem_init(&y_udp,0,0);
+	if ((err1|| err2)!=0))
+	{
+		perror("Sem init failed");
+	}
+	int errc= pthread_mutex_init(&(tinfo_connection->lock),NULL);
+	int erro = pthread_mutex_init(&(tinfo_output->lock), NULL);	
+	if (errc||erro)!=0)
+	{
+		perror("Mutex init failed");
+	}
+	return NULL;
 
- void *UDP_listener(void *t_info)
-{
-	struct TINFO *tinfo = t_info;
-	char buf[MSG_LENGHT];
-	double value;
-
-	while(1){
-		int err = udp_receive(&(tinfo->conn), buf, MSG_LENGHT);
-		if(err!=0){
-			perror("Udp_receive failed");
-		}
-		pthread_mutex_lock(&TINFOlock);
-		tinfo->y = atof(buf);				
-		
-		pthread_mutex_unlock(&TINFOlock);
-		sem_post(&y_updt);							
-	}	
-}
-		
-
-void *UPD_sender(void *t_info)
-{	
-	char buf[MSG_LENGTH];
-	sem_wait(&u_updt);
-	pthread_mutex_lock(&TINFOlock);	
-	itoa(u,buf,10);
-	pthread_mytex_unlock(&TINFOlock);
 }
 
+void destroy_sem_&_mutexes(){
+
+	//Destroy all semaphores and mutexes
+	int err1= sem_destroy(&new_sig);
+	int err2= sem_destroy(&y_udpt);
+	int err3= ptread_mutex_destroy(&(tinfo_output->lock));
+	int err4= ptread_mutex_destroy(&(tinfo_connection->lock));
+	if( (err1 || err2 || err3 || err4)!=0)
+	{
+		perror("Could not destroy the sem or mutex");
+	}
+	return NULL;
+}
+*/

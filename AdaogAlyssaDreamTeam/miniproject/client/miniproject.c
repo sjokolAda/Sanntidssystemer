@@ -49,7 +49,7 @@ void udp_close(struct udp_conn *udp)
 	return;
 }
 
-int clock_nanosleep(struct timespec *next)
+int clock_nanosleep1(struct timespec *next)
 {
 	struct timespec now;
 	struct timespec sleep;
