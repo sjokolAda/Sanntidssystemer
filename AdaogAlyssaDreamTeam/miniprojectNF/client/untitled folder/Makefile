@@ -1,6 +1,7 @@
 # program executable name 
 TARGET = mainprog
-CC= /home/student/Desktop/ex10/buildroot-avr32-v3.0.0_TTK4147/output/build/linux-2.6.35.4
+PATH= /home/student/Desktop/buildroot-avr32-v3.0.0_TTK4147/output/staging/usr/bin/
+CC=avr32-linux-gcc
 # compiler flags 
 CFLAGS = -g -Wall
 # linker flags 
@@ -17,6 +18,7 @@ $(TARGET): $(OBJECTS)
 # compile 
 %.o : %.c 
 	$(CC) $(CFLAGS) -c -o $@ $< 
+
 # cleaning 
 clean: 
 	rm -f $(TARGET) $(OBJECTS) 
