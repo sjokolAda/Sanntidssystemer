@@ -1,0 +1,105 @@
+
+#include "mainprog.h"
+
+void init_sem_and_mutexes();
+void destroy_sem_and_mutexes();
+
+int main()
+{
+	int err=0;
+	
+	//Init mutexes and semaphores
+	init_sem_and_mutexes();	
+	
+	// Init UDP connection struct
+	err = udp_init_client(&tinfo_connection.conn, UDP_PORT, SERVER_IP);
+	if (err!=0)
+	{
+		perror("Error connecting to server");
+	}
+	
+    	//Start all 3 threads
+	
+	pthread_t udprecv, pidctrl, sighandl;
+
+	err = pthread_create(&udprecv, NULL, UDP_listener, NULL);
+	if (err!=0)
+	{
+		perror("Thread Creation failed");
+	}
+
+	err = pthread_create(&pidctrl, NULL, PIDctrl, NULL);
+	if (err!=0)
+	{
+		perror("Thread Creation failed");
+	}
+	
+	err = pthread_create(&sighandl, NULL,signalHandler,NULL );
+	if (err!=0)
+	{
+		perror("Thread Creation failed");
+	}	
+	
+	// Start simulation
+
+	pthread_mutex_lock(&tinfo_connection.sendlock);
+
+	if((udp_send(&tinfo_connection.conn, "START", sizeof("START")))==-1)
+	{
+		printf("Failed to start simulation");	
+	}
+	pthread_mutex_unlock(&tinfo_connection.sendlock);
+	
+	//Join thread
+	err = pthread_join(pidctrl, NULL);  
+    	if (err != 0) {  
+        	perror("Joining of thread failed stoped");    
+    	}
+	
+	// Stop simulation
+	pthread_mutex_lock(&tinfo_connection.sendlock);
+
+	if((udp_send(&tinfo_connection.conn, "STOP", sizeof("STOP")))==-1)
+	{
+		perror("Failed to stop simulation");	
+	}
+	pthread_mutex_unlock(&tinfo_connection.sendlock);
+	
+	//Destroy all semaphores and mutexes
+	destroy_sem_and_mutexes();
+
+	return NULL;      
+}
+
+
+void init_sem_and_mutexes(){
+
+	//Init semaphores/mutexes
+	int err1 = sem_init(&new_sig,0,0);
+	int err2 = sem_init(&y_updt,0,0);
+	if ((err1|| err2)!=0)
+	{
+		perror("Sem init failed");
+	}
+
+	int errc= pthread_mutex_init(&tinfo_connection.sendlock,NULL);
+	int erro = pthread_mutex_init(&tinfo_output.lock, NULL);	
+	if ((errc||erro)!=0)
+	{
+		perror("Mutex init failed");
+	}
+}
+
+void destroy_sem_and_mutexes(){
+
+	//Destroy all semaphores and mutexes
+	int err1= sem_destroy(&new_sig);
+	int err2= sem_destroy(&y_updt);
+	int err3= pthread_mutex_destroy(&tinfo_connection.sendlock);
+	int err4= pthread_mutex_destroy(&tinfo_output.lock);
+	if( (err1 || err2 || err3 || err4)!=0)
+	{
+		perror("Could not destroy the sem or mutex");
+	}
+}
+

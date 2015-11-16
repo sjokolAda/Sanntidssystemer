@@ -1,0 +1,23 @@
+# program executable name 
+TARGET = mainprog
+#CC= /home/student/Desktop/buildroot-avr32-v3.0.0_TTK4147/output/build/linux-2.6.35.4
+CC=gcc
+# compiler flags 
+CFLAGS = -g -Wall
+# linker flags 
+LDFLAGS = -g -pthread 
+# list of sources 
+SOURCES = $(shell find -name "*.c") 
+# default rule, to compile everything 
+all: $(TARGET) 
+# define object files 
+OBJECTS = $(SOURCES:.c=.o) 
+# link programs 
+$(TARGET): $(OBJECTS) 
+	$(CC) $(LDFLAGS) -o $@ $^ 
+# compile 
+%.o : %.c 
+	$(CC) $(CFLAGS) -c -o $@ $< 
+# cleaning 
+clean: 
+	rm -f $(TARGET) $(OBJECTS) 
